@@ -1,0 +1,123 @@
+/* ══════════════════════════════════════════════════════
+   BASE TOKENS — 90s Editorial Portfolio
+   Cream · Ink · Brick Red · Deep Teal
+   "Typography-first, always."
+══════════════════════════════════════════════════════ */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Light theme (default) ── */
+:root {
+  /* Surfaces */
+  --bg:          #F8F5EE;   /* warm parchment */
+  --bg-alt:      #F0EBE0;   /* slightly deeper cream */
+  --surface:     #FFFFFF;   /* white panels */
+
+  /* Ink */
+  --ink:         #1A1208;   /* near-black, warm */
+  --ink-dim:     #3C2F1E;   /* dark brown */
+  --ink-muted:   #7A6650;   /* warm mid-brown */
+  --ink-faint:   #B0957A;   /* light warm-grey */
+
+  /* Accent — brick red / rust, never purple */
+  --accent:      #9B2800;   /* brick red */
+  --accent-hover:#C13300;   /* slightly brighter on hover */
+  --accent-soft: #FDF0EB;   /* very faint red tint */
+
+  /* Links — deep teal, classic editorial */
+  --link:        #0F5E55;
+  --link-hover:  #1A8A7A;
+
+  /* Utility */
+  --accent-green:#1A6B35;
+  --accent-gold: #8A5E00;
+
+  /* Rules / borders */
+  --rule:        #D8CEBA;   /* warm tan */
+  --rule-dark:   #B8A58C;   /* slightly darker tan */
+
+  /* Typography */
+  --font-serif: "Times New Roman", "TimesNewRoman", Times, Georgia, "Palatino Linotype", Palatino, serif;
+  --font-mono:  "Courier New", Courier, "Lucida Console", monospace;
+  --font-sans:  Arial, Helvetica, sans-serif;
+
+  /* Layout */
+  --max-w:   760px;
+  --pad-x:   28px;
+  --radius:  3px;
+  --radius-sm: 1px;
+
+  scroll-behavior: smooth;
+  color-scheme: light;
+}
+
+/* ── Dark theme ── */
+[data-theme="dark"] {
+  --bg:          #17110A;   /* deep warm-black */
+  --bg-alt:      #1F170E;   /* slightly lighter */
+  --surface:     #241A10;   /* warm dark surface */
+
+  --ink:         #F0E8D6;   /* warm cream */
+  --ink-dim:     #C8B899;   /* medium cream */
+  --ink-muted:   #8A7560;   /* dim cream-brown */
+  --ink-faint:   #5A4A38;   /* very dim */
+
+  --accent:      #E04010;   /* brighter brick for dark bg */
+  --accent-hover:#F05020;
+  --accent-soft: #2A1508;
+
+  --link:        #3DBFAB;   /* lighter teal for dark bg */
+  --link-hover:  #5AD4C0;
+
+  --accent-green:#4ADE80;
+  --accent-gold: #D4A30A;
+
+  --rule:        #3A2E20;
+  --rule-dark:   #5A4A35;
+
+  color-scheme: dark;
+}
+
+/* ── Base ── */
+html { font-size: 16px; }
+
+body {
+  font-family: var(--font-serif);
+  background-color: var(--bg);
+  color: var(--ink);
+  line-height: 1.68;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  transition: background-color 0.28s ease, color 0.28s ease;
+  overflow-x: hidden;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 7px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb {
+  background: var(--rule-dark);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--ink-faint); }
+
+/* ── Focus ── */
+:focus-visible {
+  outline: 2px dashed var(--accent);
+  outline-offset: 3px;
+}
+
+/* ── Selection ── */
+::selection {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

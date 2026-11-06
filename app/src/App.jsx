@@ -1,4 +1,3 @@
-
 import {
   useState,
   useEffect,
@@ -15,6 +14,8 @@ import img6 from "./assets/images/img7.jpg";
 import img7 from "./assets/images/img8.jpg";
 
 import barberImage from "./assets/images/front.png";
+import pikachuImg from "./assets/images/pikachu.png";
+import raichuImg from "./assets/images/raichu.jpg";
 import bgMusic from "./assets/audio/bg.mp3";
 import "./App.css";
 
@@ -24,7 +25,7 @@ const ME = {
   location: "Nepal",
   email: "samirniroua79@gmail.com",
   github: "https://github.com/Samir-N",
-  bio: "I build practical web applications, reliable APIs, and backend systems.",
+  bio: "Myself Samir Niroula, 18 yold student",
 };
 
 const PROJECTS = [
@@ -33,6 +34,22 @@ const PROJECTS = [
     title: "Barber Booking App",
     year: "2026",
     status: "In progress",
+    tagline:
+      "Skip the waiting-room chaos: book a slot and watch the queue update live.",
+    highlights: [
+      {
+        title: "Live queue",
+        text: "Real-time status updates pushed with Socket.IO.",
+      },
+      {
+        title: "Easy booking",
+        text: "Appointments and queue handled in one place.",
+      },
+      {
+        title: "Secure login",
+        text: "JWT-based authentication for every user.",
+      },
+    ],
     description:
       "A barber appointment and queue management app with booking, status updates, and authentication.",
     tech: ["MongoDB", "Express", "React", "Node.js", "Socket.IO", "JWT"],
@@ -53,6 +70,11 @@ const EDUCATION = [
     institution: "Himalaya Secondary School",
     period: "Completed",
   },
+  {
+    title: "Secondary Education Examination",
+    institution: "Himalaya Secondary School",
+    period: "Completed",
+  },
 ];
 
 const EXPERIENCE = [
@@ -67,17 +89,25 @@ const EXPERIENCE = [
   },
 ];
 
-const TECH = [
-  "Node.js",
-  "Express.js",
-  "MongoDB",
-  "PostgreSQL",
-  "Docker",
-  "AWS",
-  "Socket.IO",
-  "React",
-  "Git",
-  "Vercel",
+const TECH_GROUPS = [
+  {
+    level: "core",
+    label: "Core",
+    note: "My main tools",
+    items: ["Node.js", "Express.js", "MongoDB", "PostgreSQL"],
+  },
+  {
+    level: "solid",
+    label: "Comfortable",
+    note: "Use them often",
+    items: ["React", "Socket.IO", "Git", "Vercel"],
+  },
+  {
+    level: "learning",
+    label: "Learning",
+    note: "Getting better",
+    items: ["Docker", "AWS"],
+  },
 ];
 
 /* ── Theme ─────────────────────────────────────────── */
@@ -111,8 +141,10 @@ function useTheme() {
 
 /* ── Scroll reveal ────────────────────────────────── */
 
-function useScrollReveal() {
+function useScrollReveal(ready = true) {
   useEffect(() => {
+    if (!ready) return;
+
     const elements = document.querySelectorAll("[data-reveal]");
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -137,7 +169,7 @@ function useScrollReveal() {
     elements.forEach((element) => observer.observe(element));
 
     return () => observer.disconnect();
-  }, []);
+  }, [ready]);
 }
 
 /* ── Background music ─────────────────────────────── */
@@ -193,6 +225,21 @@ function useBackgroundMusic() {
       void play();
     }
   }, [isPlaying, play, stop]);
+
+  // stop the music when the visitor leaves the tab or the page
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.hidden) stop();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pagehide", stop);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("pagehide", stop);
+    };
+  }, [stop]);
 
   return { isPlaying, toggleMusic };
 }
@@ -265,6 +312,410 @@ function MusicWidget({ isPlaying, onToggle, small = false }) {
   );
 }
 
+/* ── Background removal (edge flood-fill) ────────── */
+
+// Turns the flat background of a JPG transparent, in the browser.
+// It only removes background-coloured pixels connected to the image edge,
+// so whites inside the character (eyes, belly) are kept.
+function useCutout(src, tolerance = 55) {
+  const [url, setUrl] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const img = new Image();
+
+    img.onload = () => {
+      const scale = Math.min(
+        1,
+        480 / Math.max(img.naturalWidth, img.naturalHeight)
+      );
+      const w = Math.round(img.naturalWidth * scale);
+      const h = Math.round(img.naturalHeight * scale);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(img, 0, 0, w, h);
+
+      let imageData;
+      try {
+        imageData = ctx.getImageData(0, 0, w, h);
+      } catch {
+        return; // canvas blocked: keep the original image
+      }
+
+      const d = imageData.data;
+
+      // background colour = average of the four corners
+      const corners = [0, w - 1, (h - 1) * w, h * w - 1];
+      let r = 0, g = 0, b = 0;
+      corners.forEach((i) => {
+        r += d[i * 4];
+        g += d[i * 4 + 1];
+        b += d[i * 4 + 2];
+      });
+      r /= 4; g /= 4; b /= 4;
+
+      const dist2 = (i) => {
+        const dr = d[i * 4] - r;
+        const dg = d[i * 4 + 1] - g;
+        const db = d[i * 4 + 2] - b;
+        return dr * dr + dg * dg + db * db;
+      };
+
+      const tol2 = tolerance * tolerance;
+      const removed = new Uint8Array(w * h);
+      const stack = [];
+
+      const push = (i) => {
+        if (!removed[i] && dist2(i) <= tol2) {
+          removed[i] = 1;
+          stack.push(i);
+        }
+      };
+
+      for (let x = 0; x < w; x++) {
+        push(x);
+        push((h - 1) * w + x);
+      }
+      for (let y = 0; y < h; y++) {
+        push(y * w);
+        push(y * w + w - 1);
+      }
+
+      while (stack.length) {
+        const i = stack.pop();
+        const x = i % w;
+        if (x > 0) push(i - 1);
+        if (x < w - 1) push(i + 1);
+        if (i >= w) push(i - w);
+        if (i < w * (h - 1)) push(i + w);
+      }
+
+      const soft2 = tol2 * 3;
+
+      for (let i = 0; i < w * h; i++) {
+        if (removed[i]) {
+          d[i * 4 + 3] = 0;
+          continue;
+        }
+
+        const x = i % w;
+        const touchesBg =
+          (x > 0 && removed[i - 1]) ||
+          (x < w - 1 && removed[i + 1]) ||
+          (i >= w && removed[i - w]) ||
+          (i < w * (h - 1) && removed[i + w]);
+
+        // soften the JPG halo around the edge
+        if (touchesBg) d[i * 4 + 3] = dist2(i) < soft2 ? 0 : 170;
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+
+      if (!cancelled) setUrl(canvas.toDataURL("image/png"));
+    };
+
+    img.src = src;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [src, tolerance]);
+
+  return url;
+}
+
+/* ── Pikachu cursor follower (click to evolve) ────── */
+
+const EVOLVE_MS = 2600;
+
+function PikachuFollower({ active }) {
+  const elRef = useRef(null);
+  const hoverRef = useRef(false);
+  const stageRef = useRef("pikachu");
+  const evolveTimer = useRef(null);
+
+  const [facing, setFacing] = useState(1); // 1 = right, -1 = left
+  const [moving, setMoving] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [stage, setStage] = useState("pikachu"); // pikachu | evolving | raichu
+
+  const raichuSrc = useCutout(raichuImg) || raichuImg;
+
+  const changeStage = useCallback((next) => {
+    stageRef.current = next;
+    setStage(next);
+  }, []);
+
+  const evolve = () => {
+    if (stageRef.current !== "pikachu") return;
+
+    const reduced = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+
+    changeStage("evolving");
+    setHovered(false);
+
+    evolveTimer.current = setTimeout(
+      () => changeStage("raichu"),
+      reduced ? 600 : EVOLVE_MS
+    );
+  };
+
+  // music off: reset back to Pikachu
+  useEffect(() => {
+    if (active) return;
+
+    clearTimeout(evolveTimer.current);
+    hoverRef.current = false;
+    setHovered(false);
+    changeStage("pikachu");
+  }, [active, changeStage]);
+
+  useEffect(() => () => clearTimeout(evolveTimer.current), []);
+
+  // chase the cursor
+  useEffect(() => {
+    if (!active) return;
+
+    const target = {
+      x: window.innerWidth / 2,
+      y: window.innerHeight / 2,
+    };
+    const pos = { ...target };
+
+    let frame;
+    let currentFacing = 1;
+    let currentMoving = false;
+
+    const handlePointerMove = (event) => {
+      target.x = event.clientX;
+      target.y = event.clientY;
+    };
+
+    const tick = () => {
+      // stand still while hovered (so you can click it) or evolving
+      const frozen = hoverRef.current || stageRef.current === "evolving";
+
+      // aim slightly below and right of the cursor so it doesn't cover it
+      const dx = target.x + 18 - pos.x;
+      const dy = target.y + 18 - pos.y;
+      const dist = Math.hypot(dx, dy) || 1;
+
+      if (!frozen) {
+        // slow, floaty chase: tiny easing plus a gentle top speed
+        const speed = Math.min(dist * 0.035, 3.2);
+        pos.x += (dx / dist) * speed;
+        pos.y += (dy / dist) * speed;
+      }
+
+      if (elRef.current) {
+        elRef.current.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
+      }
+
+      const isMoving = !frozen && dist > 10;
+      if (isMoving !== currentMoving) {
+        currentMoving = isMoving;
+        setMoving(isMoving);
+      }
+
+      if (!frozen && Math.abs(dx) > 4) {
+        const nextFacing = dx > 0 ? 1 : -1;
+        if (nextFacing !== currentFacing) {
+          currentFacing = nextFacing;
+          setFacing(nextFacing);
+        }
+      }
+
+      frame = requestAnimationFrame(tick);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove, {
+      passive: true,
+    });
+    frame = requestAnimationFrame(tick);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      cancelAnimationFrame(frame);
+      setMoving(false);
+    };
+  }, [active]);
+
+  if (!active) return null;
+
+  return (
+    <div className={`pikachu pikachu--${stage}`} ref={elRef}>
+      <button
+        className="pikachu__btn"
+        type="button"
+        aria-label={
+          stage === "pikachu" ? "Evolve Pikachu" : "Raichu"
+        }
+        onPointerEnter={() => {
+          hoverRef.current = true;
+          setHovered(true);
+        }}
+        onPointerLeave={() => {
+          hoverRef.current = false;
+          setHovered(false);
+        }}
+        onClick={evolve}
+      >
+        {hovered && stage === "pikachu" && (
+          <span className="pikachu__tip" aria-hidden="true">
+            Evolve?
+          </span>
+        )}
+
+        {stage === "evolving" && (
+          <span className="pikachu__glow" aria-hidden="true" />
+        )}
+
+        <span
+          className={`pikachu__sprite${moving ? " is-moving" : ""}`}
+          style={{ transform: `scaleX(${facing})`, "--facing": facing }}
+        >
+          {stage === "pikachu" && (
+            <img
+              className="pikachu__img"
+              src={pikachuImg}
+              alt=""
+              draggable={false}
+            />
+          )}
+
+          {stage === "evolving" && (
+            <>
+              <img
+                className="pikachu__img evo-a"
+                src={pikachuImg}
+                alt=""
+                draggable={false}
+              />
+              <img
+                className="pikachu__img pikachu__img--raichu evo-b"
+                src={raichuSrc}
+                alt=""
+                draggable={false}
+              />
+            </>
+          )}
+
+          {stage === "raichu" && (
+            <img
+              className="pikachu__img pikachu__img--raichu pikachu__img--pop"
+              src={raichuSrc}
+              alt=""
+              draggable={false}
+            />
+          )}
+        </span>
+
+        {stage === "raichu" && (
+          <span className="pikachu__burst" aria-hidden="true">
+            {Array.from({ length: 8 }, (_, i) => (
+              <i key={i} style={{ "--a": `${i * 45}deg` }} />
+            ))}
+          </span>
+        )}
+      </button>
+    </div>
+  );
+}
+
+/* ── Loading screen ───────────────────────────────── */
+
+const LOADER_MS = 2000;
+const LOADER_EXIT_MS = 700;
+
+const LOADER_MESSAGES = [
+  { upTo: 30, text: "Warming up" },
+  { upTo: 65, text: "Loading projects" },
+  { upTo: 99, text: "Almost there" },
+  { upTo: 100, text: "Ready" },
+];
+
+function Loader({ onFinish }) {
+  const [progress, setProgress] = useState(0);
+  const [leaving, setLeaving] = useState(false);
+
+  useEffect(() => {
+    const start = performance.now();
+    let frame;
+
+    const tick = (now) => {
+      const t = Math.min((now - start) / LOADER_MS, 1);
+      // ease in-out so it feels like real loading
+      const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+      setProgress(Math.round(eased * 100));
+
+      if (t < 1) {
+        frame = requestAnimationFrame(tick);
+      } else {
+        setLeaving(true);
+      }
+    };
+
+    frame = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  useEffect(() => {
+    if (!leaving) return;
+
+    const id = setTimeout(onFinish, LOADER_EXIT_MS);
+    return () => clearTimeout(id);
+  }, [leaving, onFinish]);
+
+  const message = LOADER_MESSAGES.find((m) => progress <= m.upTo).text;
+
+  return (
+    <div
+      className={`loader${leaving ? " loader--leaving" : ""}`}
+      role="status"
+      aria-live="polite"
+      aria-label="Loading portfolio"
+    >
+      <div className="loader__inner">
+        <p className="loader__logo" aria-hidden="true">
+          SN<span>.</span>
+        </p>
+
+        <p className="loader__name">
+          Samir Niroula <span>/</span> Backend Developer
+        </p>
+
+        <div
+          className="loader__bar"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progress}
+        >
+          <span
+            className="loader__fill"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+
+        <div className="loader__meta">
+          <span className="loader__msg">{message}</span>
+          <span className="loader__count">
+            {String(progress).padStart(3, "0")}%
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Navigation ───────────────────────────────────── */
 
 function Navbar({ theme, toggleTheme, isPlaying, toggleMusic }) {
@@ -272,8 +723,8 @@ function Navbar({ theme, toggleTheme, isPlaying, toggleMusic }) {
 
   const links = [
     { label: "Projects", href: "#projects" },
-    { label: "Pictures", href: "#pictures" },
     { label: "About", href: "#about" },
+    { label: "Pictures", href: "#pictures" },
     { label: "Contact", href: "#contact" },
   ];
 
@@ -349,7 +800,8 @@ function Hero() {
           </h1>
 
           <p className="hero__role">
-            Backend Developer <span>—</span> Nepal
+            <strong className="hero__role-hl">Backend Developer</strong>{" "}
+            <span>—</span> Nepal
           </p>
 
           <p className="hero__bio">{ME.bio}</p>
@@ -386,8 +838,10 @@ function Hero() {
         </Reveal>
 
         <div className="hero__aside" aria-hidden="true">
-          <span className="hero__aside-number">90s</span>
+          <span className="hero__aside-number">200</span>
           <span className="hero__aside-caption">
+            OK.
+            <br />
             Built with care.
             <br />
             Kept simple.
@@ -425,69 +879,127 @@ function Projects() {
 }
 
 function ProjectEntry({ project }) {
-  const [showImage, setShowImage] = useState(false);
+  const windowRef = useRef(null);
+
+  const handleMove = (event) => {
+    if (event.pointerType === "touch" || !windowRef.current) return;
+
+    const rect = windowRef.current.getBoundingClientRect();
+    const px = (event.clientX - rect.left) / rect.width - 0.5;
+    const py = (event.clientY - rect.top) / rect.height - 0.5;
+
+    windowRef.current.style.setProperty("--ry", `${px * 7}deg`);
+    windowRef.current.style.setProperty("--rx", `${-py * 5}deg`);
+  };
+
+  const handleLeave = () => {
+    if (!windowRef.current) return;
+
+    windowRef.current.style.setProperty("--ry", "0deg");
+    windowRef.current.style.setProperty("--rx", "0deg");
+  };
 
   return (
     <Reveal className="project-entry">
-      <div className="pe__top">
-        <span className="pe__num">{project.number}.</span>
+      <div className="pe__head">
+        <span className="pe__num" aria-hidden="true">
+          {project.number}
+        </span>
 
         <div className="pe__heading">
-          <h3 className="pe__title">{project.title}</h3>
-
-          <div className="pe__meta">
+          <p className="pe__kicker">
+            <span className="pe__badge">★ Featured</span>
             <span>{project.year}</span>
-            <span aria-hidden="true">/</span>
-            <span className="pe__status">{project.status}</span>
+            <span className="pe__status">
+              <i aria-hidden="true" />
+              {project.status}
+            </span>
+          </p>
+
+          <h3 className="pe__title">{project.title}</h3>
+          <p className="pe__tagline">{project.tagline}</p>
+        </div>
+      </div>
+
+      <div
+        className="pe__stage"
+        onPointerMove={handleMove}
+        onPointerLeave={handleLeave}
+      >
+        <span className="pe__sticker" aria-hidden="true">
+          Try it live →
+        </span>
+
+        <div className="pe__window" ref={windowRef}>
+          <div className="pe__titlebar">
+            <span className="pe__lights" aria-hidden="true">
+              <i />
+              <i />
+              <i />
+            </span>
+
+            <span className="pe__url">
+              {project.live.replace("https://", "")}
+            </span>
+
+            <span className="pe__live-tag">● Live</span>
           </div>
+
+          <a
+            className="pe__shot"
+            href={project.live}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Open ${project.title} live demo`}
+          >
+            <ProtectedImage
+              src={project.image}
+              alt={`${project.title} screenshot`}
+              loading="eager"
+            />
+
+            <span className="pe__shot-cta">Open live demo ↗</span>
+          </a>
         </div>
       </div>
 
       <p className="pe__desc">{project.description}</p>
 
-      <div className="pe__img-row">
-        <button
-          className="pe__img-toggle"
-          type="button"
-          aria-expanded={showImage}
-          onClick={() => setShowImage((visible) => !visible)}
-        >
-          {showImage ? "Hide preview −" : "View preview +"}
-        </button>
+      <ul className="pe__highlights">
+        {project.highlights.map((item, index) => (
+          <li key={item.title}>
+            <span className="pe__hl-num">0{index + 1}</span>
+            <strong>{item.title}</strong>
+            <span>{item.text}</span>
+          </li>
+        ))}
+      </ul>
 
-        {showImage && (
-          <div className="pe__img-wrap">
-            <ProtectedImage
-              className="pe__img"
-              src={project.image}
-              alt={`${project.title} screenshot`}
-            />
-          </div>
-        )}
-      </div>
-
-      <div className="pe__tech">
-        <span className="pe__tech-label">Built with: </span>
-        {project.tech.join(" · ")}
+      <div className="pe__tech" aria-label="Built with">
+        {project.tech.map((tech) => (
+          <span className="pe__chip" key={tech}>
+            {tech}
+          </span>
+        ))}
       </div>
 
       <div className="pe__links">
         <a
-          className="retro-link retro-link--primary"
-          href={project.github}
-          target="_blank"
-          rel="noreferrer"
-        >
-          Source code ↗
-        </a>
-
-        <a
-          className="retro-link"
+          className="retro-link retro-link--primary retro-link--lg"
           href={project.live}
           target="_blank"
           rel="noreferrer"
         >
           Live demo ↗
+        </a>
+
+        <a
+          className="retro-link retro-link--lg"
+          href={project.github}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Source code ↗
         </a>
       </div>
     </Reveal>
@@ -522,15 +1034,18 @@ function Pictures() {
   }, [selectedPicture]);
 
   return (
-    <section className="page-section pictures-section" id="pictures">
+    <section
+      className="page-section page-section--alt pictures-section"
+      id="pictures"
+    >
       <div className="page-section__inner">
         <Reveal>
-          <p className="eyebrow">Visual archive / 02</p>
+          <p className="eyebrow">Visual archive / 05</p>
           <h2 className="section-title">
             Pictures<span>.</span>
           </h2>
           <p className="section-intro">
-            Eight little moments, collected like prints from an old photo album.
+            Seven little moments, collected like prints from an old photo album.
           </p>
         </Reveal>
 
@@ -580,12 +1095,15 @@ function Pictures() {
             </button>
 
             <ProtectedImage
+              className="picture-lightbox__image"
               src={selectedPicture.image}
               alt={selectedPicture.alt}
               loading="eager"
             />
 
-            <p>{selectedPicture.caption}</p>
+            <p className="picture-lightbox__caption">
+              {selectedPicture.caption}
+            </p>
           </div>
         )}
       </div>
@@ -681,20 +1199,31 @@ function Stack() {
             Tech stack<span>.</span>
           </h2>
           <p className="section-intro">
-            Technologies I use to build and ship projects.
+            From what I rely on most to what I am still picking up.
           </p>
         </Reveal>
 
-        <Reveal className="stack-list">
-          {TECH.map((tech, index) => (
-            <span className="stack-item" key={tech}>
-              <span className="stack-item__number">
-                {String(index + 1).padStart(2, "0")}
-              </span>
-              {tech}
-            </span>
+        <div className="stack-tiers">
+          {TECH_GROUPS.map((group) => (
+            <Reveal
+              key={group.level}
+              className={`stack-tier stack-tier--${group.level}`}
+            >
+              <div className="stack-tier__info">
+                <h3>{group.label}</h3>
+                <p>{group.note}</p>
+              </div>
+
+              <ul className="stack-tier__items">
+                {group.items.map((tech) => (
+                  <li className="stack-chip" key={tech}>
+                    {tech}
+                  </li>
+                ))}
+              </ul>
+            </Reveal>
           ))}
-        </Reveal>
+        </div>
       </div>
     </section>
   );
@@ -704,10 +1233,10 @@ function Stack() {
 
 function Contact() {
   return (
-    <section className="page-section page-section--alt" id="contact">
+    <section className="page-section" id="contact">
       <div className="page-section__inner">
         <Reveal>
-          <p className="eyebrow">Have a project in mind? / 05</p>
+          <p className="eyebrow">Have a project in mind? / 06</p>
           <h2 className="section-title">
             Let’s talk<span>.</span>
           </h2>
@@ -770,10 +1299,24 @@ export default function App() {
   const { theme, toggleTheme } = useTheme();
   const { isPlaying, toggleMusic } = useBackgroundMusic();
 
-  useScrollReveal();
+  const [loading, setLoading] = useState(true);
+  const finishLoading = useCallback(() => setLoading(false), []);
+
+  // no scrolling while the loading screen is up
+  useEffect(() => {
+    document.body.style.overflow = loading ? "hidden" : "";
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [loading]);
+
+  useScrollReveal(!loading);
 
   return (
     <div className="site-shell">
+      {loading && <Loader onFinish={finishLoading} />}
+
       <Navbar
         theme={theme}
         toggleTheme={toggleTheme}
@@ -781,14 +1324,16 @@ export default function App() {
         toggleMusic={toggleMusic}
       />
 
+      <PikachuFollower active={isPlaying} />
+
       <main>
         <Hero />
         <Rule label="Contents" />
         <Projects />
-        <Pictures />
         <Education />
         <Experience />
         <Stack />
+        <Pictures />
         <Contact />
       </main>
 

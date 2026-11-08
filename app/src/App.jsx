@@ -94,19 +94,19 @@ const TECH_GROUPS = [
     level: "core",
     label: "Core",
     note: "My main tools",
-    items: ["Node.js", "Express.js", "MongoDB", "PostgreSQL"],
+    items: ["Node.js", "Express.js", "MongoDB", "React"],
   },
   {
     level: "solid",
     label: "Comfortable",
     note: "Use them often",
-    items: ["React", "Socket.IO", "Git", "Vercel"],
+    items: ["Next.js", "Socket.IO", "Git", "Vercel"],
   },
   {
     level: "learning",
     label: "Learning",
     note: "Getting better",
-    items: ["Docker", "AWS"],
+    items: ["Docker", "AWS","Typescript"],
   },
 ];
 
@@ -132,11 +132,7 @@ function useTheme() {
     localStorage.setItem("portfolio-theme", theme);
   }, [theme]);
 
-  const toggleTheme = useCallback(() => {
-    setTheme((current) => (current === "light" ? "dark" : "light"));
-  }, []);
-
-  return { theme, toggleTheme };
+  return { theme, setTheme };
 }
 
 /* ── Scroll reveal ────────────────────────────────── */
@@ -428,17 +424,80 @@ function useCutout(src, tolerance = 55) {
   return url;
 }
 
-/* ── Pikachu cursor follower (click to evolve) ────── */
+/* ── Minecraft dirt burst on click ────────────────── */
+
+const DIRT_COLORS = ["#866043", "#593d29", "#7a5230", "#9b7653", "#6b4a31"];
+
+function useDirtClick() {
+  useEffect(() => {
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+    const handlePointerDown = (event) => {
+      if (reduced.matches) return;
+
+      for (let i = 0; i < 12; i += 1) {
+        const size = [6, 8, 10][Math.floor(Math.random() * 3)];
+        const dx = (Math.random() - 0.5) * 90;
+        const up = -(18 + Math.random() * 40);
+        const fall = 50 + Math.random() * 60;
+
+        const bit = document.createElement("span");
+        bit.className = "dirt-bit";
+        bit.style.left = `${event.clientX - size / 2}px`;
+        bit.style.top = `${event.clientY - size / 2}px`;
+        bit.style.width = `${size}px`;
+        bit.style.height = `${size}px`;
+        bit.style.backgroundColor =
+          DIRT_COLORS[Math.floor(Math.random() * DIRT_COLORS.length)];
+        document.body.appendChild(bit);
+
+        // pop up and out, then drop with gravity
+        const animation = bit.animate(
+          [
+            { transform: "translate(0, 0)", opacity: 1, easing: "ease-out" },
+            {
+              transform: `translate(${dx * 0.6}px, ${up}px)`,
+              opacity: 1,
+              offset: 0.35,
+              easing: "ease-in",
+            },
+            {
+              transform: `translate(${dx}px, ${up + fall}px)`,
+              opacity: 0,
+            },
+          ],
+          { duration: 550 + Math.random() * 300, fill: "forwards" }
+        );
+
+        animation.onfinish = () => bit.remove();
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
+}
+
+/* ── Pikachu scroll runner (click to evolve) ──────── */
 
 const EVOLVE_MS = 2600;
 
-function PikachuFollower({ active }) {
-  const elRef = useRef(null);
-  const hoverRef = useRef(false);
+// Which way each image faces in its original artwork:
+// 1 = faces right, -1 = faces left. (Both arts face left.)
+// If a sprite ever runs backwards while scrolling, flip its value.
+const PIKACHU_FACES = -1;
+const RAICHU_FACES = -1;
+
+function PikachuProgress() {
+  const runnerRef = useRef(null);
+  const fillRef = useRef(null);
   const stageRef = useRef("pikachu");
   const evolveTimer = useRef(null);
+  const idleTimer = useRef(null);
 
-  const [facing, setFacing] = useState(1); // 1 = right, -1 = left
+  const [percent, setPercent] = useState(0);
+  const [facing, setFacing] = useState(1); // 1 = running right (scrolling down)
   const [moving, setMoving] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [stage, setStage] = useState("pikachu"); // pikachu | evolving | raichu
@@ -466,164 +525,179 @@ function PikachuFollower({ active }) {
     );
   };
 
-  // music off: reset back to Pikachu
+  useEffect(
+    () => () => {
+      clearTimeout(evolveTimer.current);
+      clearTimeout(idleTimer.current);
+    },
+    []
+  );
+
+  // run along the bottom as the page scrolls
   useEffect(() => {
-    if (active) return;
+    let lastY = window.scrollY;
+    let frame = 0;
 
-    clearTimeout(evolveTimer.current);
-    hoverRef.current = false;
-    setHovered(false);
-    changeStage("pikachu");
-  }, [active, changeStage]);
+    const update = () => {
+      frame = 0;
 
-  useEffect(() => () => clearTimeout(evolveTimer.current), []);
+      const max =
+        document.documentElement.scrollHeight - window.innerHeight;
+      const progress =
+        max > 0 ? Math.min(Math.max(window.scrollY / max, 0), 1) : 0;
+      const pct = progress * 100;
 
-  // chase the cursor
-  useEffect(() => {
-    if (!active) return;
+      if (runnerRef.current) {
+        runnerRef.current.style.left = `${pct}%`;
+        runnerRef.current.style.transform = `translateX(-${pct}%)`;
+      }
 
-    const target = {
-      x: window.innerWidth / 2,
-      y: window.innerHeight / 2,
-    };
-    const pos = { ...target };
+      if (fillRef.current) fillRef.current.style.width = `${pct}%`;
 
-    let frame;
-    let currentFacing = 1;
-    let currentMoving = false;
-
-    const handlePointerMove = (event) => {
-      target.x = event.clientX;
-      target.y = event.clientY;
+      setPercent(Math.round(pct));
     };
 
-    const tick = () => {
-      // stand still while hovered (so you can click it) or evolving
-      const frozen = hoverRef.current || stageRef.current === "evolving";
-
-      // aim slightly below and right of the cursor so it doesn't cover it
-      const dx = target.x + 18 - pos.x;
-      const dy = target.y + 18 - pos.y;
-      const dist = Math.hypot(dx, dy) || 1;
-
-      if (!frozen) {
-        // slow, floaty chase: tiny easing plus a gentle top speed
-        const speed = Math.min(dist * 0.035, 3.2);
-        pos.x += (dx / dist) * speed;
-        pos.y += (dy / dist) * speed;
-      }
-
-      if (elRef.current) {
-        elRef.current.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
-      }
-
-      const isMoving = !frozen && dist > 10;
-      if (isMoving !== currentMoving) {
-        currentMoving = isMoving;
-        setMoving(isMoving);
-      }
-
-      if (!frozen && Math.abs(dx) > 4) {
-        const nextFacing = dx > 0 ? 1 : -1;
-        if (nextFacing !== currentFacing) {
-          currentFacing = nextFacing;
-          setFacing(nextFacing);
-        }
-      }
-
-      frame = requestAnimationFrame(tick);
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update);
     };
 
-    window.addEventListener("pointermove", handlePointerMove, {
-      passive: true,
-    });
-    frame = requestAnimationFrame(tick);
+    const handleScroll = () => {
+      const y = window.scrollY;
+
+      if (y !== lastY) {
+        setFacing(y > lastY ? 1 : -1);
+        setMoving(true);
+        clearTimeout(idleTimer.current);
+        idleTimer.current = setTimeout(() => setMoving(false), 160);
+        lastY = y;
+      }
+
+      schedule();
+    };
+
+    update();
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", schedule);
+
+    // page height changes as images load and sections reveal
+    const observer =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(schedule)
+        : null;
+
+    observer?.observe(document.body);
 
     return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", schedule);
+      observer?.disconnect();
       cancelAnimationFrame(frame);
-      setMoving(false);
     };
-  }, [active]);
+  }, []);
 
-  if (!active) return null;
+  const done = percent >= 100;
+  const showTip = hovered && stage === "pikachu" && !done;
 
   return (
-    <div className={`pikachu pikachu--${stage}`} ref={elRef}>
-      <button
-        className="pikachu__btn"
-        type="button"
-        aria-label={
-          stage === "pikachu" ? "Evolve Pikachu" : "Raichu"
-        }
-        onPointerEnter={() => {
-          hoverRef.current = true;
-          setHovered(true);
-        }}
-        onPointerLeave={() => {
-          hoverRef.current = false;
-          setHovered(false);
-        }}
-        onClick={evolve}
+    <div className="scroll-run">
+      <div
+        className="scroll-run__track"
+        role="progressbar"
+        aria-label="Page scroll progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
       >
-        {hovered && stage === "pikachu" && (
-          <span className="pikachu__tip" aria-hidden="true">
-            Evolve?
+        <div className="scroll-run__fill" ref={fillRef} />
+      </div>
+
+      <div className={`pikachu pikachu--${stage}`} ref={runnerRef}>
+        {!showTip && !done && (
+          <span className="scroll-run__pct" aria-hidden="true">
+            {percent}%
           </span>
         )}
 
-        {stage === "evolving" && (
-          <span className="pikachu__glow" aria-hidden="true" />
+        {done && (
+          <div className="scroll-run__thanks" role="status">
+            Thanks for visiting!
+          </div>
         )}
 
-        <span
-          className={`pikachu__sprite${moving ? " is-moving" : ""}`}
-          style={{ transform: `scaleX(${facing})`, "--facing": facing }}
+        <button
+          className="pikachu__btn"
+          type="button"
+          aria-label={
+            stage === "pikachu" ? "Evolve Pikachu" : "Raichu"
+          }
+          onPointerEnter={() => setHovered(true)}
+          onPointerLeave={() => setHovered(false)}
+          onClick={evolve}
         >
-          {stage === "pikachu" && (
-            <img
-              className="pikachu__img"
-              src={pikachuImg}
-              alt=""
-              draggable={false}
-            />
+          {showTip && (
+            <span className="pikachu__tip" aria-hidden="true">
+              Evolve?
+            </span>
           )}
 
           {stage === "evolving" && (
-            <>
-              <img
-                className="pikachu__img evo-a"
-                src={pikachuImg}
-                alt=""
-                draggable={false}
-              />
-              <img
-                className="pikachu__img pikachu__img--raichu evo-b"
-                src={raichuSrc}
-                alt=""
-                draggable={false}
-              />
-            </>
+            <span className="pikachu__glow" aria-hidden="true" />
           )}
+
+          <span
+            className={`pikachu__sprite${moving ? " is-moving" : ""}`}
+            style={{ transform: `scaleX(${facing})`, "--facing": facing }}
+          >
+            {stage === "pikachu" && (
+              <img
+                className="pikachu__img"
+                src={pikachuImg}
+                style={{ transform: `scaleX(${PIKACHU_FACES})` }}
+                alt=""
+                draggable={false}
+              />
+            )}
+
+            {stage === "evolving" && (
+              <>
+                <img
+                  className="pikachu__img evo-a"
+                  src={pikachuImg}
+                  style={{ transform: `scaleX(${PIKACHU_FACES})` }}
+                  alt=""
+                  draggable={false}
+                />
+                <img
+                  className="pikachu__img pikachu__img--raichu evo-b"
+                  src={raichuSrc}
+                  style={{ transform: `scaleX(${RAICHU_FACES})` }}
+                  alt=""
+                  draggable={false}
+                />
+              </>
+            )}
+
+            {stage === "raichu" && (
+              <img
+                className="pikachu__img pikachu__img--raichu pikachu__img--pop"
+                src={raichuSrc}
+                style={{ transform: `scaleX(${RAICHU_FACES})` }}
+                alt=""
+                draggable={false}
+              />
+            )}
+          </span>
 
           {stage === "raichu" && (
-            <img
-              className="pikachu__img pikachu__img--raichu pikachu__img--pop"
-              src={raichuSrc}
-              alt=""
-              draggable={false}
-            />
+            <span className="pikachu__burst" aria-hidden="true">
+              {Array.from({ length: 8 }, (_, i) => (
+                <i key={i} style={{ "--a": `${i * 45}deg` }} />
+              ))}
+            </span>
           )}
-        </span>
-
-        {stage === "raichu" && (
-          <span className="pikachu__burst" aria-hidden="true">
-            {Array.from({ length: 8 }, (_, i) => (
-              <i key={i} style={{ "--a": `${i * 45}deg` }} />
-            ))}
-          </span>
-        )}
-      </button>
+        </button>
+      </div>
     </div>
   );
 }
@@ -716,14 +790,90 @@ function Loader({ onFinish }) {
   );
 }
 
+/* ── Settings dropdown (theme + music) ────────────── */
+
+function SettingsMenu({ theme, onThemeChange, isPlaying, toggleMusic }) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+
+  // close on outside click or Escape
+  useEffect(() => {
+    if (!open) return;
+
+    const handlePointerDown = (event) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div className="settings" ref={wrapRef}>
+      <button
+        className="theme-toggle settings__toggle"
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="true"
+        aria-controls="settings-panel"
+        onClick={() => setOpen((current) => !current)}
+      >
+        Settings <span aria-hidden="true">{open ? "▴" : "▾"}</span>
+      </button>
+
+      {open && (
+        <div
+          className="settings__panel"
+          id="settings-panel"
+          role="group"
+          aria-label="Settings"
+        >
+          <div className="settings__row">
+            <span className="settings__label">Theme</span>
+
+            <button
+              className="theme-toggle"
+              type="button"
+              onClick={() => onThemeChange(theme === "dark" ? "light" : "dark")}
+              aria-label={`Switch to ${
+                theme === "dark" ? "light" : "dark"
+              } theme`}
+            >
+              {theme === "dark" ? "☾ Dark" : "☀ Light"}
+            </button>
+          </div>
+
+          <div className="settings__row">
+            <span className="settings__label">Music</span>
+
+            <MusicWidget isPlaying={isPlaying} onToggle={toggleMusic} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Navigation ───────────────────────────────────── */
 
-function Navbar({ theme, toggleTheme, isPlaying, toggleMusic }) {
+function Navbar({ theme, onThemeChange, isPlaying, toggleMusic }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const links = [
     { label: "Projects", href: "#projects" },
-    { label: "About", href: "#about" },
+    { label: "Experience", href: "#experience" },
+    { label: "Stack", href: "#stack" },
     { label: "Pictures", href: "#pictures" },
     { label: "Contact", href: "#contact" },
   ];
@@ -759,25 +909,12 @@ function Navbar({ theme, toggleTheme, isPlaying, toggleMusic }) {
         </nav>
 
         <div className="navbar__controls">
-          <MusicWidget
+          <SettingsMenu
+            theme={theme}
+            onThemeChange={onThemeChange}
             isPlaying={isPlaying}
-            onToggle={toggleMusic}
-            small
+            toggleMusic={toggleMusic}
           />
-
-          <button
-            className="theme-toggle"
-            type="button"
-            onClick={toggleTheme}
-            aria-label={`Switch to ${
-              theme === "light" ? "dark" : "light"
-            } theme`}
-            title={`Switch to ${
-              theme === "light" ? "dark" : "light"
-            } theme`}
-          >
-            {theme === "light" ? "Dark" : "Light"}
-          </button>
         </div>
       </div>
     </header>
@@ -1019,19 +1156,71 @@ const PICTURES = [
 ];
 
 function Pictures() {
-  const [selectedPicture, setSelectedPicture] = useState(null);
+  const [activeIndex, setActiveIndex] = useState(null);
+  const [direction, setDirection] = useState("none"); // none | next | prev
+
+  const swipeStart = useRef(null);
+  const lastSwipeAt = useRef(0);
+
+  const isOpen = activeIndex !== null;
+  const selectedPicture = isOpen ? PICTURES[activeIndex] : null;
+
+  const openPicture = (index) => {
+    setDirection("none");
+    setActiveIndex(index);
+  };
+
+  const closePicture = useCallback(() => setActiveIndex(null), []);
+
+  // step through the gallery, wrapping around at both ends
+  const go = useCallback((step) => {
+    setDirection(step > 0 ? "next" : "prev");
+    setActiveIndex(
+      (current) =>
+        (current + step + PICTURES.length) % PICTURES.length
+    );
+  }, []);
 
   useEffect(() => {
-    if (!selectedPicture) return;
+    if (!isOpen) return;
 
     const handleKeyDown = (event) => {
-      if (event.key === "Escape") setSelectedPicture(null);
+      if (event.key === "Escape") closePicture();
+      if (event.key === "ArrowRight") go(1);
+      if (event.key === "ArrowLeft") go(-1);
     };
 
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedPicture]);
+  }, [isOpen, go, closePicture]);
+
+  // swipe left = next picture, swipe right = previous picture
+  const handleSwipeStart = (event) => {
+    swipeStart.current = { x: event.clientX, y: event.clientY };
+  };
+
+  const handleSwipeEnd = (event) => {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+
+    if (!start) return;
+
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+      lastSwipeAt.current = Date.now();
+      go(dx < 0 ? 1 : -1);
+    }
+  };
+
+  const handleBackdropClick = () => {
+    // a swipe also fires a click; don't let it close the viewer
+    if (Date.now() - lastSwipeAt.current < 400) return;
+
+    closePicture();
+  };
 
   return (
     <section
@@ -1057,7 +1246,7 @@ function Pictures() {
                   (index % 4) + 1
                 }`}
                 type="button"
-                onClick={() => setSelectedPicture(picture)}
+                onClick={() => openPicture(index)}
                 aria-label={`View ${picture.caption}`}
               >
                 <span className="picture-card__photo">
@@ -1083,27 +1272,66 @@ function Pictures() {
             role="dialog"
             aria-modal="true"
             aria-label={selectedPicture.caption}
-            onClick={() => setSelectedPicture(null)}
+            onClick={handleBackdropClick}
           >
             <button
               className="picture-lightbox__close"
               type="button"
-              onClick={() => setSelectedPicture(null)}
+              onClick={closePicture}
               aria-label="Close picture"
             >
               Close ×
             </button>
 
-            <ProtectedImage
-              className="picture-lightbox__image"
-              src={selectedPicture.image}
-              alt={selectedPicture.alt}
-              loading="eager"
-            />
+            <button
+              className="picture-lightbox__nav picture-lightbox__nav--prev"
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                go(-1);
+              }}
+              aria-label="Previous picture"
+            >
+              ‹
+            </button>
 
-            <p className="picture-lightbox__caption">
-              {selectedPicture.caption}
-            </p>
+            <div
+              className="picture-lightbox__stage"
+              onPointerDown={handleSwipeStart}
+              onPointerUp={handleSwipeEnd}
+              onPointerCancel={() => {
+                swipeStart.current = null;
+              }}
+            >
+              <figure
+                key={activeIndex}
+                className={`picture-lightbox__slide picture-lightbox__slide--${direction}`}
+              >
+                <ProtectedImage
+                  className="picture-lightbox__image"
+                  src={selectedPicture.image}
+                  alt={selectedPicture.alt}
+                  loading="eager"
+                />
+
+                <figcaption className="picture-lightbox__caption">
+                  {selectedPicture.caption} · {activeIndex + 1} /{" "}
+                  {PICTURES.length}
+                </figcaption>
+              </figure>
+            </div>
+
+            <button
+              className="picture-lightbox__nav picture-lightbox__nav--next"
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                go(1);
+              }}
+              aria-label="Next picture"
+            >
+              ›
+            </button>
           </div>
         )}
       </div>
@@ -1115,7 +1343,7 @@ function Pictures() {
 
 function Education() {
   return (
-    <section className="page-section" id="about">
+    <section className="page-section" id="education">
       <div className="page-section__inner">
         <Reveal>
           <p className="eyebrow">Learning / 02</p>
@@ -1231,41 +1459,106 @@ function Stack() {
 
 /* ── Contact ──────────────────────────────────────── */
 
+const CONTACT_TOPICS = [
+  {
+    number: "01",
+    title: "Internships",
+    text: "Backend roles where I can learn fast and ship real work.",
+  },
+  {
+    number: "02",
+    title: "Collaborations",
+    text: "Side projects, hackathons and anything worth building.",
+  },
+  {
+    number: "03",
+    title: "Ideas",
+    text: "Got something in mind? Let’s talk it through.",
+  },
+];
+
 function Contact() {
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef(null);
+
+  useEffect(() => () => clearTimeout(copyTimer.current), []);
+
+  const copyEmail = async () => {
+    try {
+      await navigator.clipboard.writeText(ME.email);
+      setCopied(true);
+      clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setCopied(false);
+    }
+  };
+
   return (
-    <section className="page-section" id="contact">
+    <section className="page-section contact" id="contact">
       <div className="page-section__inner">
         <Reveal>
           <p className="eyebrow">Have a project in mind? / 06</p>
-          <h2 className="section-title">
+          <h2 className="section-title contact__title">
             Let’s talk<span>.</span>
           </h2>
 
-          <p className="contact__text">
-            Have an opportunity, idea, or question? Send me a message.
+          <p className="contact__lead">
+            This is the part that matters most. If something here caught your
+            eye, an opportunity, an idea or just a question, write to me. I
+            read every message.
           </p>
+        </Reveal>
 
-          <div className="contact__links">
-            <a
-              className="retro-link"
-              href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
-                ME.email
-              )}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Email Samir using Gmail"
-            >
-              Email ↗
-            </a>
+        <Reveal className="contact__topics">
+          {CONTACT_TOPICS.map((topic) => (
+            <div className="contact__topic" key={topic.title}>
+              <span className="contact__topic-number">{topic.number}</span>
+              <h3>{topic.title}</h3>
+              <p>{topic.text}</p>
+            </div>
+          ))}
+        </Reveal>
 
-            <a
-              className="retro-link"
-              href={ME.github}
-              target="_blank"
-              rel="noreferrer"
-            >
-              GitHub ↗
-            </a>
+        <Reveal>
+          <a
+            className="contact__cta"
+            href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
+              ME.email
+            )}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Email Samir using Gmail"
+          >
+            <span className="contact__cta-text">
+              <span className="contact__cta-label">Say hello</span>
+              <span className="contact__cta-address">{ME.email}</span>
+            </span>
+
+            <span className="contact__cta-arrow" aria-hidden="true">
+              ↗
+            </span>
+          </a>
+
+          <div className="contact__sub">
+            <span className="contact__status">
+              <span className="status-dot" />
+              Open to internships &amp; collaborations
+            </span>
+
+            <span className="contact__sub-links">
+              <button
+                className="contact__copy"
+                type="button"
+                onClick={copyEmail}
+              >
+                {copied ? "Copied ✓" : "Copy email"}
+              </button>
+
+              <a href={ME.github} target="_blank" rel="noreferrer">
+                GitHub ↗
+              </a>
+            </span>
           </div>
         </Reveal>
       </div>
@@ -1296,7 +1589,7 @@ function Footer() {
 /* ── App ──────────────────────────────────────────── */
 
 export default function App() {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const { isPlaying, toggleMusic } = useBackgroundMusic();
 
   const [loading, setLoading] = useState(true);
@@ -1312,6 +1605,7 @@ export default function App() {
   }, [loading]);
 
   useScrollReveal(!loading);
+  useDirtClick();
 
   return (
     <div className="site-shell">
@@ -1319,19 +1613,19 @@ export default function App() {
 
       <Navbar
         theme={theme}
-        toggleTheme={toggleTheme}
+        onThemeChange={setTheme}
         isPlaying={isPlaying}
         toggleMusic={toggleMusic}
       />
 
-      <PikachuFollower active={isPlaying} />
+      {!loading && <PikachuProgress />}
 
       <main>
         <Hero />
         <Rule label="Contents" />
         <Projects />
-        <Education />
         <Experience />
+        <Education />
         <Stack />
         <Pictures />
         <Contact />
